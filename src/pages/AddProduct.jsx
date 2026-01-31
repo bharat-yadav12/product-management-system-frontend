@@ -11,6 +11,14 @@ import { Clear as ClearIcon } from "@mui/icons-material";
 import { axiosInstanceClient } from "../api/axiosInstance";
 import { useNavigate } from "react-router-dom";
 
+/* ------------------ slug helper ------------------ */
+const generateSlug = (text) =>
+  text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+
 const AddProduct = () => {
   const navigate = useNavigate();
 
@@ -22,80 +30,61 @@ const AddProduct = () => {
     description: ""
   });
 
-  const [images, setImages] = useState([]); // array of File objects
-  const [previewUrls, setPreviewUrls] = useState([]); // array of object URLs for display
-
+  const [images, setImages] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // ────────────────────────────────────────────────
-  //                   VALIDATION
-  // ────────────────────────────────────────────────
+  /* ------------------ validation ------------------ */
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.productName.trim()) {
+    if (!formData.productName.trim())
       newErrors.productName = "Product name is required";
-    }
-    if (!formData.metaTitle.trim()) {
+
+    if (!formData.metaTitle.trim())
       newErrors.metaTitle = "Meta title is required";
-    }
-    if (!formData.price || Number(formData.price) <= 0) {
+
+    if (!formData.price || Number(formData.price) <= 0)
       newErrors.price = "Valid price is required";
-    }
+
     if (
       formData.discountedPrice &&
       Number(formData.discountedPrice) >= Number(formData.price)
-    ) {
-      newErrors.discountedPrice = "Discounted price must be less than price";
-    }
-    if (!formData.description.trim()) {
+    )
+      newErrors.discountedPrice =
+        "Discounted price must be less than price";
+
+    if (!formData.description.trim())
       newErrors.description = "Description is required";
-    }
-    if (images.length === 0) {
+
+    if (images.length === 0)
       newErrors.images = "At least one image is required";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // ────────────────────────────────────────────────
-  //                  HANDLE IMAGE CHANGE
-  // ────────────────────────────────────────────────
+  /* ------------------ image handling ------------------ */
   const handleImageChange = (e) => {
-    const selectedFiles = Array.from(e.target.files);
-
-    // Optional: you can add file type / size validation here
-    const validImages = selectedFiles.filter((file) =>
-      file.type.startsWith("image/")
+    const files = Array.from(e.target.files).filter((f) =>
+      f.type.startsWith("image/")
     );
 
-    if (validImages.length === 0) return;
+    const previews = files.map((file) => URL.createObjectURL(file));
 
-    // Create preview URLs
-    const newPreviews = validImages.map((file) => URL.createObjectURL(file));
-
-    // Append to existing images
-    setImages((prev) => [...prev, ...validImages]);
-    setPreviewUrls((prev) => [...prev, ...newPreviews]);
+    setImages((prev) => [...prev, ...files]);
+    setPreviewUrls((prev) => [...prev, ...previews]);
   };
 
-  // ────────────────────────────────────────────────
-  //                   REMOVE IMAGE
-  // ────────────────────────────────────────────────
   const removeImage = (index) => {
+    URL.revokeObjectURL(previewUrls[index]);
+
     setImages((prev) => prev.filter((_, i) => i !== index));
-    setPreviewUrls((prev) => {
-      // Revoke the URL to free memory
-      URL.revokeObjectURL(prev[index]);
-      return prev.filter((_, i) => i !== index);
-    });
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ────────────────────────────────────────────────
-  //                      SUBMIT
-  // ────────────────────────────────────────────────
+  /* ------------------ submit ------------------ */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -105,30 +94,38 @@ const AddProduct = () => {
     try {
       const data = new FormData();
 
-      // Append text fields
-      Object.entries(formData).forEach(([key, value]) => {
-        data.append(key, value);
-      });
+      data.append("productName", formData.productName);
+      data.append("metaTitle", formData.metaTitle);
+      data.append("slug", generateSlug(formData.productName));
+      data.append("price", Number(formData.price));
+      data.append(
+        "discountedPrice",
+        formData.discountedPrice
+          ? Number(formData.discountedPrice)
+          : ""
+      );
+      data.append("description", formData.description);
 
-      // Append all images (field name must match backend multer config)
       images.forEach((file) => {
-        data.append("images", file); // "images" ← should match your multer .array("images")
+        data.append("galleryImages", file); // MUST match multer.array("images")
       });
 
       await axiosInstanceClient.post("/products", data);
 
-      // Clean up object URLs
       previewUrls.forEach(URL.revokeObjectURL);
-
       navigate("/products");
     } catch (err) {
-      console.error("Product creation failed:", err);
-      // You can show error message to user here (snackbar / alert)
+      console.error(err);
+      alert(
+        err?.response?.data?.message ||
+          "Failed to create product"
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  /* ------------------ UI ------------------ */
   return (
     <Box p={4} maxWidth={700} mx="auto">
       <Typography variant="h5" gutterBottom>
@@ -164,29 +161,28 @@ const AddProduct = () => {
           <TextField
             fullWidth
             type="number"
-            label="Price (₹)"
-            margin="normal"
+            label="Price"
             value={formData.price}
             onChange={(e) =>
               setFormData({ ...formData, price: e.target.value })
             }
             error={!!errors.price}
             helperText={errors.price}
-            inputProps={{ min: 1, step: 0.01 }}
           />
 
           <TextField
             fullWidth
             type="number"
-            label="Discounted Price (optional)"
-            margin="normal"
+            label="Discounted Price"
             value={formData.discountedPrice}
             onChange={(e) =>
-              setFormData({ ...formData, discountedPrice: e.target.value })
+              setFormData({
+                ...formData,
+                discountedPrice: e.target.value
+              })
             }
             error={!!errors.discountedPrice}
             helperText={errors.discountedPrice}
-            inputProps={{ min: 0, step: 0.01 }}
           />
         </Stack>
 
@@ -204,93 +200,63 @@ const AddProduct = () => {
           helperText={errors.description}
         />
 
-        {/* ────── Image Upload Section ────── */}
         <Box mt={3}>
-          <Button variant="outlined" component="label" color="primary">
-            Upload Product Images
+          <Button variant="outlined" component="label">
+            Upload Images
             <input
               hidden
               multiple
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={handleImageChange}
             />
           </Button>
 
           {errors.images && (
-            <Typography color="error" variant="caption" mt={1} display="block">
+            <Typography color="error" variant="caption" display="block">
               {errors.images}
             </Typography>
           )}
 
-          {/* Image Previews + Remove buttons */}
-          {previewUrls.length > 0 && (
-            <Box mt={2}>
-              <Typography variant="subtitle2" gutterBottom>
-                Selected Images ({previewUrls.length})
-              </Typography>
-
+          <Box mt={2} display="flex" gap={2} flexWrap="wrap">
+            {previewUrls.map((url, i) => (
               <Box
+                key={i}
                 sx={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 2,
-                  mt: 1
+                  position: "relative",
+                  width: 100,
+                  height: 100,
+                  border: "1px solid #ddd"
                 }}
               >
-                {previewUrls.map((url, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      position: "relative",
-                      width: 100,
-                      height: 100,
-                      border: "1px solid #ddd",
-                      borderRadius: 1,
-                      overflow: "hidden"
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src={url}
-                      alt={`preview-${index}`}
-                      sx={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover"
-                      }}
-                    />
-                    <IconButton
-                      size="small"
-                      color="error"
-                      sx={{
-                        position: "absolute",
-                        top: 2,
-                        right: 2,
-                        bgcolor: "white",
-                        "&:hover": { bgcolor: "#ffebee" }
-                      }}
-                      onClick={() => removeImage(index)}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))}
+                <img
+                  src={url}
+                  alt="preview"
+                  width="100%"
+                  height="100%"
+                  style={{ objectFit: "cover" }}
+                />
+                <IconButton
+                  size="small"
+                  color="error"
+                  sx={{ position: "absolute", top: 0, right: 0 }}
+                  onClick={() => removeImage(i)}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
               </Box>
-            </Box>
-          )}
+            ))}
+          </Box>
         </Box>
 
         <Button
           type="submit"
           variant="contained"
-          color="primary"
           fullWidth
-          size="large"
           sx={{ mt: 4 }}
           disabled={loading}
         >
-          {loading ? "Adding Product..." : "Add Product"}
+          {loading ? "Adding..." : "Add Product"}
         </Button>
       </form>
     </Box>

@@ -1,49 +1,35 @@
-import { useEffect, useState } from "react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Pagination } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
 import { Box } from "@mui/material";
 
-const ImageSlider = ({ images = [] }) => {
-  const [selected, setSelected] = useState("");
-
-  useEffect(() => {
-    if (images.length > 0) {
-      setSelected(images[0]);
-    }
-  }, [images]);
-
+const ImageSlider = ({ images = [], height = 220 }) => {
   if (!images.length) return null;
 
   return (
-    <Box>
-      <Box
-        component="img"
-        src={selected}
-        sx={{
-          width: "100%",
-          height: 350,
-          objectFit: "contain",
-          border: "1px solid #ddd"
-        }}
-      />
-
-      <Box display="flex" gap={1} mt={2}>
+    <Box sx={{ width: "100%", height }}>
+      <Swiper
+        modules={[Pagination]}
+        pagination={{ clickable: true }}
+        style={{ height: "100%" }}
+      >
         {images.map((img, index) => (
-          <Box
-            key={index}
-            component="img"
-            src={img}
-            onClick={() => setSelected(img)}
-            sx={{
-              width: 70,
-              height: 70,
-              objectFit: "contain",
-              border: selected === img ? "2px solid blue" : "1px solid #ccc",
-              cursor: "pointer"
-            }}
-          />
+          <SwiperSlide key={index}>
+            <Box
+              component="img"
+              src={img}
+              alt={`product-${index}`}
+              sx={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain"
+              }}
+            />
+          </SwiperSlide>
         ))}
-      </Box>
+      </Swiper>
     </Box>
   );
 };
-
 export default ImageSlider;
