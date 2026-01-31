@@ -1,14 +1,21 @@
 import { AppBar, Toolbar, Button, Box, Container } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../utils/auth";
+import { axiosInstanceClient } from "../api/axiosInstance.js";
 
 const Navbar = () => {
   const navigate = useNavigate();
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
-  };
+  const logout = async () => {
+  try {
+    await axiosInstanceClient.post("/users/logout");
+  } catch (error) {
+    console.error("Logout failed", error);
+  } finally {
+    localStorage.removeItem("lp"); // access token
+    navigate("/login");
+  }
+};
 
   return (
     <AppBar position="sticky" sx={{ width: "100%" }}>

@@ -11,8 +11,6 @@ export const StatusCode = {
   UnAuthorized: 401,
   Success: 200,
   Created: 201,
-  Error: "error",
-  NetworkError: "Network Error",
 };
 
 class AxiosInstance {
@@ -22,107 +20,68 @@ class AxiosInstance {
     this._axiosInstance = axios.create({
       baseURL,
       timeout: 100000,
+      withCredentials: true,
     });
-
     this._axiosInstance.interceptors.request.use(
-        (config) => {
-          config.headers = {
-            ...config.headers,
-            ...this.getHeader(),
-          
-          };
-          return config;
-        },
-        (error) => {
+      (config) => {
+        const token = localStorage.getItem("lp");
+
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+    this._axiosInstance.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const status = error?.response?.status;
+        const originalRequest = error.config;
+        if (originalRequest?.url?.includes("/users/refresh-token")) {
           return Promise.reject(error);
         }
-    );
-
-    this._axiosInstance.interceptors.response.use(
-        (response) => {
-          return response;
-        },
-        async (err) => {
-          const errCode = err?.response?.status;
-          const originalConfig = err.config;
-
-          if (
-              errCode === StatusCode.UnAuthorized &&
-              this.getToken() &&
-              this.getRefreshToken() &&
-              !originalConfig._retry
-          ) {
-            originalConfig._retry = true;
-            return await this.handleRefreshToken(originalConfig);
-          } else if (errCode === StatusCode.ManyRequest) {
-            console.log("Many requests, try again after some minutes!");
-          } else if (errCode === StatusCode.ServerError) {
-            console.log("Something went wrong, try again after some minutes!");
-          } else if (errCode === StatusCode.NetworkError) {
-            console.log("Connection network error, Please check network!");
+        if (status === StatusCode.UnAuthorized && !originalRequest._retry) {
+          originalRequest._retry = true;
+          try {
+            const response = await this._axiosInstance.post(
+              "/users/refresh-token"
+            );
+            const { accessToken } = response.data.data;
+            localStorage.setItem("lp", accessToken);
+            return this._axiosInstance(originalRequest);
+          } catch (refreshError) {
+            localStorage.removeItem("lp");
+            window.location.href = "/login";
+            return Promise.reject(refreshError);
           }
-          return Promise.reject(err);
         }
+        return Promise.reject(error);
+      }
     );
   }
- 
-  fetch(url) {
-    return this._axiosInstance.get(url);
+
+  fetch(url, config) {
+    return this._axiosInstance.get(url, config);
   }
 
-  post(url, payload) {
-    return this._axiosInstance.post(url, payload);
+  post(url, data, config) {
+    return this._axiosInstance.post(url, data, config);
   }
 
-  put(url, payload) {
-    return this._axiosInstance.put(url, payload);
+  put(url, data, config) {
+    return this._axiosInstance.put(url, data, config);
   }
 
-  patch(url, payload) {
-    return this._axiosInstance.patch(url, payload);
+  patch(url, data, config) {
+    return this._axiosInstance.patch(url, data, config);
   }
 
-  delete(url, payload) {
-    return this._axiosInstance.delete(url, payload);
-  }
-
-
-  getHeader() {
-    const token = localStorage.getItem("lp");
-  
-    if (token) {
-      return {
-        Authorization: `Bearer ${token}`,
-      };
-    } else {
-      return {};
-    }
-  }
-  
-
-  getToken() {
-    return localStorage.getItem("lp") || "";
-  }
-
-  getRefreshToken() {
-    return localStorage.getItem("rlp") || "";
-  }
-
-  async handleRefreshToken(originalConfig) {
-    try {
-      const rs = await this._axiosInstance.post("/auth/refresh-token", {
-        oldToken: this.getRefreshToken(),
-      });
-
-      const { access_token, refresh_token } = rs.data.data;
-      localStorage.setItem("lp", access_token);
-      localStorage.setItem("rlp", refresh_token);
-
-      return this._axiosInstance(originalConfig);
-    } catch (_error) {
-      return Promise.reject(_error);
-    }
+  delete(url, config) {
+    return this._axiosInstance.delete(url, config);
   }
 }
 
 export const axiosInstanceClient = new AxiosInstance();
+
