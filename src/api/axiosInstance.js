@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const baseURL = "http://192.168.0.169:3000/api/";
+const baseURL = "http://localhost:3000/api/v1";
 
 export const StatusCode = {
   NotFound: 404,
